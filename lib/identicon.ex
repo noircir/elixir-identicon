@@ -39,8 +39,17 @@ defmodule Identicon do
   end
 
   def build_grid(%Identicon.Image{seed: seed} = image ) do
-    seed
-    |> Enum.chunk_every(3)
+    grid = 
+      seed
+      |> Enum.chunk_every(3, 3, :discard)
+      |> Enum.map(&mirror_row/1)
+      |> List.flatten
+      |> Enum.with_index
+
+      # pipe syntax is updating a struct (like updating a map:
+      # "to update the value stored under existing atom keys")
+
+    %Identicon.Image{image | grid: grid}
   end
 
   def mirror_row([first, second | _tail] = row) do
