@@ -17,25 +17,45 @@ defmodule Identicon do
     |> hash_input
     |> pick_color
     |> build_grid
+    |> filter_even_squares
+    |> build_pixel_map
+    |> draw_image
+    |> save_image(input)
   end
 
-  def hash_input(input) do
-    seed = :crypto.hash(:md5, input)
-    |> :binary.bin_to_list
-    # seed is an array of 16 hex numbers;
-    # we'll feed it into the Image struct
-    %Identicon.Image{seed: seed}
+  def save_image(image, input) do 
+    File.write("#{input}.png", image)
   end
 
-  @doc """
-  Picks first three numbers out of the array, which will represent R, G, B
+  def draw_image(%Identicon.Image{color: color, pixel_map: pixel_map}) do
+    image = :egd.create(250, 250)
+    fill = :egd.color(color)
 
-  """
-  def pick_color(%Identicon.Image{seed: [r, g, b | _tail]} = image) do
-    # Not modifing any image; creating a new one by copying 
-    # the whole image (which is {seed: seed}), and specifying the "color"
-    # property of the struct.
-    %Identicon.Image{image | color: {r, g, b}}
+    Enum.each pixel_map, fn({start, stop}) -> 
+      :egd.filledRectangle(image, start, stop, fill)
+    end
+
+    :egd.render(image)
+  end
+
+  def build_pixel_map(%Identicon.Image{grid: grid} = image) do
+    pixel_map = Enum.map grid, fn({ _code, index }) ->  
+      horizontal = rem(index, 5) * 50
+      vertical = div(index, 5) * 50
+      top_left = {horizontal, vertical}
+      bottom_right = {horizontal + 50, vertical + 50}
+      {top_left, bottom_right}
+    end
+
+    %Identicon.Image{image | pixel_map: pixel_map}
+  end
+
+  def filter_even_squares(%Identicon.Image{grid: grid} = image) do
+    grid = Enum.filter(grid, fn({code, _index}) -> 
+      rem(code, 2) == 0 
+    end)
+
+    %Identicon.Image{image | grid: grid}
   end
 
   def build_grid(%Identicon.Image{seed: seed} = image ) do
@@ -46,11 +66,28 @@ defmodule Identicon do
       |> List.flatten
       |> Enum.with_index
 
-      # pipe syntax is updating a struct (like updating a map:
-      # "to update the value stored under existing atom keys")
-
+    # Update grid property with an array of index tuples.
     %Identicon.Image{image | grid: grid}
   end
+
+  @doc """
+  Picks first three numbers out of the array. They will represent R, G, B values.
+
+  """
+  def pick_color(%Identicon.Image{seed: [r, g, b | _tail]} = image) do
+    # Updating color property in Image struct
+    %Identicon.Image{image | color: {r, g, b}}
+  end
+
+  def hash_input(input) do
+    seed = :crypto.hash(:md5, input)
+    |> :binary.bin_to_list
+    # seed is an array of 16 hex numbers;
+    # we'll feed it into the Image struct
+    %Identicon.Image{seed: seed}
+  end
+
+  #========= Helpers ===========
 
   def mirror_row([first, second | _tail] = row) do
     # [145, 46, 200]
